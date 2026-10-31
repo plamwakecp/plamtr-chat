@@ -1,0 +1,23 @@
+{
+  "name": "plamtr",
+  "version": "1.0.0",
+  "description": "PlamTR - Şifreli, güvenli sohbet uygulaması",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
+    "bcryptjs": "^2.4.3",
+    "crypto-js": "^4.2.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "multer": "^1.4.5-lts.2",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.1"
+  }
+}

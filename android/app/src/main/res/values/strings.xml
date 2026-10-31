@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Plamtr Chat</string>
+    <string name="title_activity_main">Plamtr Chat</string>
+    <string name="package_name">com.plamtr.chat</string>
+    <string name="custom_url_scheme">com.plamtr.chat</string>
+</resources>

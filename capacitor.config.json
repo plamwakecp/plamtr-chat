@@ -1,0 +1,15 @@
+{
+  "appId": "com.plamtr.chat",
+  "appName": "Plamtr Chat",
+  "webDir": "public",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "backgroundColor": "#0f0f1a"
+  },
+  "ios": {
+    "backgroundColor": "#0f0f1a"
+  }
+}
