@@ -91,7 +91,7 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const fullName = document.getElementById('reg-fullname').value.trim();
+  const fullName = '';
   const username = document.getElementById('reg-username').value.trim().toLowerCase();
   const email = document.getElementById('reg-email').value.trim();
   const questionId = document.getElementById('reg-question').value;
@@ -99,8 +99,8 @@ async function doRegister() {
   const answer = document.getElementById('reg-answer').value.trim();
   const pw = document.getElementById('reg-password').value;
   const pw2 = document.getElementById('reg-password2').value;
-  if (!fullName) { toast('Adını yaz!', 'warning'); return; }
-  if (!/^[a-z0-9_]{3,20}$/.test(username)) { toast('Kullanıcı adı 3-20 karakter olmalı!', 'warning'); return; }
+  if (pw.length < 8) { toast('Şifre en az 8 karakter olmalı (harf + rakam).', 'warning'); return; }
+  if (username.length < 3 || username.length > 20) { toast('Kullanıcı adı 3-20 karakter olmalı!', 'warning'); return; }
   if (pw !== pw2) { toast('Şifreler eşleşmiyor!', 'warning'); return; }
   const r = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fullName,username,email,questionId,questionText,answer,password:pw}) });
   const d = await r.json();
@@ -108,7 +108,7 @@ async function doRegister() {
   token = d.token;
   user = d.user;
   localStorage.setItem('plamtr_token', token);
-  toast('Kayıt başarılı! 200 coin kazandın! 🪙', 'success');
+  toast('Kayıt başarılı! Giriş yapıyorsun…', 'success');
   document.getElementById('auth-screen').classList.add('hidden');
   initApp();
 }

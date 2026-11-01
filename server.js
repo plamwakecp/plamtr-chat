@@ -192,10 +192,11 @@ function publicUser(u) {
 app.get('/api/recovery-questions', (req, res) => res.json(RECOVERY_QUESTIONS));
 
 app.post('/api/register', (req, res) => {
-  const { fullName, username, email, questionId, questionText, answer, password } = req.body;
-  if (!fullName || fullName.trim().length < 2) return res.json({ error: 'Adını yaz.' });
+  const { username, email, questionId, questionText, answer, password } = req.body;
+  let fullName = req.body.fullName || '';
   const u = (username || '').trim().toLowerCase();
-  if (!/^[a-z0-9_]{3,20}$/.test(u)) return res.json({ error: 'Kullanıcı adı 3-20 karakter, sadece küçük harf/rakam/_ olabilir.' });
+  if (!fullName) fullName = u;
+  if (u.length < 3 || u.length > 20) return res.json({ error: 'Kullanıcı adı 3-20 karakter olmalı.' });
   if (Object.values(users).some(x => x.username === u)) return res.json({ error: 'Bu kullanıcı adı zaten alınmış!' });
   const pe = pwError(password || '');
   if (pe) return res.json({ error: pe });
@@ -203,7 +204,7 @@ app.post('/api/register', (req, res) => {
   const id = crypto.randomUUID();
   const kp = genKeypair();
   users[id] = {
-    id, username: u, displayName: fullName.trim(),
+    id, username: u, displayName: fullName.trim() || u,
     email: (email || '').trim().toLowerCase(),
     recoveryQuestionId: questionId || 'animal',
     recoveryQuestionText: questionId === 'custom' ? (questionText || '') : '',
