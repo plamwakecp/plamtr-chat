@@ -78,14 +78,14 @@ async function checkUsername() {
 async function doLogin() {
   const username = document.getElementById('login-username').value.trim().toLowerCase();
   const password = document.getElementById('login-password').value;
-  if (!username || !password) { alert('Kullanıcı adı ve şifre gerekli.'); return; }
+  if (!username || !password) { toast('Kullanıcı adı ve şifre gerekli!', 'warning'); return; }
   const r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password}) });
   const d = await r.json();
-  if (d.error) { alert(d.error); return; }
+  if (d.error) { toast('Giriş başarısız! ' + d.error, 'error'); return; }
   token = d.token;
-  keypair = d.keypair;
   user = d.user;
   localStorage.setItem('plamtr_token', token);
+  toast('Giriş başarılı! Yönlendiriliyorsunuz…', 'success');
   document.getElementById('auth-screen').classList.add('hidden');
   initApp();
 }
@@ -99,18 +99,17 @@ async function doRegister() {
   const answer = document.getElementById('reg-answer').value.trim();
   const pw = document.getElementById('reg-password').value;
   const pw2 = document.getElementById('reg-password2').value;
-  if (!fullName) { alert('Adını yaz.'); return; }
-  if (!/^[a-z0-9_]{3,20}$/.test(username)) { alert('Kullanıcı adı 3-20 karakter, sadece küçük harf/rakam/_ olabilir.'); return; }
-  if (pw !== pw2) { alert('Şifreler eşleşmiyor.'); return; }
+  if (!fullName) { toast('Adını yaz!', 'warning'); return; }
+  if (!/^[a-z0-9_]{3,20}$/.test(username)) { toast('Kullanıcı adı 3-20 karakter olmalı!', 'warning'); return; }
+  if (pw !== pw2) { toast('Şifreler eşleşmiyor!', 'warning'); return; }
   const r = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fullName,username,email,questionId,questionText,answer,password:pw}) });
   const d = await r.json();
-  if (d.error) { alert(d.error); return; }
+  if (d.error) { toast('Kayıt başarısız! ' + d.error, 'error'); return; }
   token = d.token;
-  keypair = d.keypair;
   user = d.user;
   localStorage.setItem('plamtr_token', token);
+  toast('Kayıt başarılı! 200 coin kazandın! 🪙', 'success');
   document.getElementById('auth-screen').classList.add('hidden');
-  alert('✅ Kayıt başarılı! 200 coin kazandın!');
   initApp();
 }
 
