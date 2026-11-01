@@ -99,7 +99,10 @@ async function doRegister() {
   const answer = document.getElementById('reg-answer').value.trim();
   const pw = document.getElementById('reg-password').value;
   const pw2 = document.getElementById('reg-password2').value;
-  if (pw.length < 8) { toast('Şifre en az 8 karakter olmalı (harf + rakam).', 'warning'); return; }
+  if (pw.length < 8 || pw.length > 20) { toast('Şifre 8-20 karakter olmalı!', 'warning'); return; }
+  if (!/[A-Z]/.test(pw)) { toast('Şifre büyük harf içermeli!', 'warning'); return; }
+  if (!/[a-z]/.test(pw)) { toast('Şifre küçük harf içermeli!', 'warning'); return; }
+  if (!/[0-9]/.test(pw)) { toast('Şifre rakam içermeli!', 'warning'); return; }
   if (username.length < 3 || username.length > 20) { toast('Kullanıcı adı 3-20 karakter olmalı!', 'warning'); return; }
   if (pw !== pw2) { toast('Şifreler eşleşmiyor!', 'warning'); return; }
   const r = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fullName,username,email,questionId,questionText,answer,password:pw}) });
