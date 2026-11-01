@@ -2,28 +2,198 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Plamtr Chat</title>
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 <div id="toast-container"></div>
+
+<!-- SPLASH -->
 <div id="splash" class="splash"><div class="splash-logo">💬</div><div class="splash-name">Plamtr Chat</div><div class="splash-sub">Şifreli & Hızlı Sohbet</div></div>
-<div id="auth-screen" class="screen hidden"><div class="auth-wrap"><div class="auth-logo">💬</div><div class="auth-title">Plamtr Chat</div><div class="auth-tabs"><button id="tab-login" class="auth-tab active">Giriş</button><button id="tab-register" class="auth-tab">Kayıt</button></div>
-<form id="login-form" class="auth-form" onsubmit="doLogin();return false"><label>Kullanıcı Adı</label><input id="login-username" type="text" placeholder="kullanici_adi" autocomplete="username"><label>Şifre</label><input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password"><button type="submit" class="btn-primary">Giriş Yap</button><div class="auth-link" onclick="showForgot()">Şifremi unuttum</div><div class="auth-link" onclick="showAbout()">ℹ️ Plamtr Chat Nedir?</div></form>
-<form id="register-form" class="auth-form hidden" onsubmit="doRegister();return false"><label>Kullanıcı Adı</label><input id="reg-username" type="text" oninput="checkUsername()"><div id="reg-username-hint" class="username-hint"></div><label>E-posta (isteğe bağlı)</label><input id="reg-email" type="email"><label>Güvenlik Sorusu</label><select id="reg-question" onchange="showCustomQuestion()"><option value="city">Memleketin neresi?</option><option value="food">En sevdiğin yemek?</option><option value="game">Sevdiğin oyun?</option><option value="custom">Kendi sorun</option></select><div id="custom-question-wrap" class="hidden"><label>Sorun</label><input id="reg-custom-question" type="text"></div><label>Cevap</label><input id="reg-answer" type="text"><label>Şifre</label><input id="reg-password" type="password"><label>Şifre Tekrar</label><input id="reg-password2" type="password"><button type="submit" class="btn-primary">Kayıt Ol</button></form>
-<form id="forgot-form" class="auth-form hidden" onsubmit="return false"><label>Kullanıcı Adı</label><input id="forgot-username" type="text"><div style="display:flex;gap:8px"><button type="button" class="btn-sm" onclick="forgotQuestion()">🔑 Sorudan</button><button type="button" class="btn-sm" onclick="forgotEmail()">📧 E-posta</button></div><div id="forgot-q-text"></div><div id="forgot-info"></div><div id="forgot-answer-wrap" class="hidden"><label>Cevabın</label><input id="forgot-answer" type="text"><button type="button" class="btn-primary" onclick="submitForgotAnswer()">Gönder</button></div><div id="forgot-code-wrap" class="hidden"><label>6 Haneli Kod</label><input id="forgot-code" type="text" maxlength="6"><label>Yeni Şifre</label><input id="forgot-newpw" type="password"><button type="button" class="btn-primary" onclick="doResetPw()">Sıfırla</button></div><div class="auth-link" onclick="showAuthForm('login')">← Girişe dön</div></form>
-<div id="about-screen" class="auth-form hidden"><h3 style="color:#f80">💬 Plamtr Chat Nedir?</h3><p>Plamtr Chat, uçtan uca şifreli (E2E) anlık mesajlaşma uygulamasıdır.</p><p>• 🔐 Mesajların yalnızca sen ve karşı taraf görür.<br>• 📎 Fotoğraf, ses, video gönder.<br>• 📞 Sesli/video arama.<br>• 👥 Grup sohbeti.<br>• 🪙 Coin kazan, 👑 VIP ol.</p><div class="auth-link" onclick="showAuthForm('login')">← Girişe dön</div></div></div></div>
+
+<!-- AUTH -->
+<div id="auth-screen" class="screen hidden">
+<div class="auth-wrap">
+<div class="auth-logo">💬</div>
+<div class="auth-title">Plamtr Chat</div>
+<div class="auth-tabs">
+<button id="tab-login" class="auth-tab active" onclick="showAuthForm('login')">Giriş Yap</button>
+<button id="tab-register" class="auth-tab" onclick="showAuthForm('register')">Kayıt Ol</button>
+</div>
+
+<!-- LOGIN -->
+<form id="login-form" class="auth-form" onsubmit="doLogin();return false">
+<label>Kullanıcı Adı</label>
+<input id="login-username" type="text" placeholder="kullaniciadi" autocomplete="username">
+<label>Şifre</label>
+<div class="input-group">
+<input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password">
+<button type="button" class="eye-btn" onclick="togglePass('login-password',this)">👁️</button>
+</div>
+<button type="submit" class="btn-primary">Giriş Yap</button>
+<div class="auth-links">
+<div class="auth-link" onclick="showForgot()">🔑 Şifremi Unuttum</div>
+<div class="auth-link" onclick="showAbout()">ℹ️ Plamtr Chat Nedir?</div>
+</div>
+</form>
+
+<!-- REGISTER -->
+<form id="register-form" class="auth-form hidden" onsubmit="doRegister();return false">
+<label>Kullanıcı Adı</label>
+<input id="reg-username" type="text" placeholder="kullaniciadi" oninput="checkUsername()">
+<div id="reg-username-hint" class="hint"></div>
+<label>E-posta (isteğe bağlı)</label>
+<input id="reg-email" type="email" placeholder="ornek@mail.com">
+<label>Güvenlik Sorusu</label>
+<select id="reg-question" onchange="showCustomQuestion()">
+<option value="city">🏠 Memleketin neresi?</option>
+<option value="food">🍕 En sevdiğin yemek?</option>
+<option value="game">🎮 Sevdiğin oyun?</option>
+<option value="custom">✏️ Kendi sorun</option>
+</select>
+<div id="custom-question-wrap" class="hidden"><label>Sorun</label><input id="reg-custom-question" type="text" placeholder="Örn: Annemin adı ne?"></div>
+<label>Cevap</label>
+<input id="reg-answer" type="text" placeholder="Cevabını yaz">
+<label>Şifre</label>
+<div class="input-group">
+<input id="reg-password" type="password" placeholder="••••••••" oninput="checkStrength()">
+<button type="button" class="eye-btn" onclick="togglePass('reg-password',this)">👁️</button>
+</div>
+<div id="strength-bar"><div id="strength-fill"></div></div>
+<div id="strength-text"></div>
+<div id="strength-rules">
+<span id="rule-len">📏 8-20 karakter</span>
+<span id="rule-upper">⬆️ Büyük harf</span>
+<span id="rule-lower">⬇️ Küçük harf</span>
+<span id="rule-num">🔢 Rakam</span>
+</div>
+<label>Şifre Tekrar</label>
+<div class="input-group">
+<input id="reg-password2" type="password" placeholder="••••••••">
+<button type="button" class="eye-btn" onclick="togglePass('reg-password2',this)">👁️</button>
+</div>
+<button type="submit" class="btn-primary">Kayıt Ol</button>
+</form>
+
+<!-- FORGOT -->
+<form id="forgot-form" class="auth-form hidden" onsubmit="return false">
+<label>Kullanıcı Adı</label>
+<input id="forgot-username" type="text" placeholder="kullaniciadi">
+<div class="btn-row">
+<button type="button" class="btn-sm" onclick="forgotQuestion()">🔑 Sorudan</button>
+<button type="button" class="btn-sm" onclick="forgotEmail()">📧 E-postadan</button>
+</div>
+<div id="forgot-q-text"></div>
+<div id="forgot-info"></div>
+<div id="forgot-answer-wrap" class="hidden">
+<label>Cevap</label><input id="forgot-answer" type="text">
+<button type="button" class="btn-primary" onclick="submitForgotAnswer()">Gönder</button>
+</div>
+<div id="forgot-code-wrap" class="hidden">
+<label>6 Haneli Kod</label><input id="forgot-code" type="text" maxlength="6">
+<label>Yeni Şifre</label>
+<div class="input-group">
+<input id="forgot-newpw" type="password">
+<button type="button" class="eye-btn" onclick="togglePass('forgot-newpw',this)">👁️</button>
+</div>
+<button type="button" class="btn-primary" onclick="doResetPw()">Sıfırla</button>
+</div>
+<div class="auth-link" onclick="showAuthForm('login')">← Girişe Dön</div>
+</form>
+
+<!-- ABOUT -->
+<div id="about-screen" class="auth-form hidden">
+<h3 style="color:#f80">💬 Plamtr Chat Nedir?</h3>
+<p>Plamtr Chat, uçtan uca şifreli (E2E) anlık mesajlaşma uygulamasıdır.</p>
+<p>🔐 Mesajlar yalnız sen ve karşı taraf görür<br>📎 Fotoğraf, ses, video gönder<br>📞 Sesli/video arama<br>👥 Grup sohbeti<br>🪙 Coin kazan, 👑 VIP ol<br>🌈 Çerçeve ve efektler</p>
+<div class="auth-link" onclick="showAuthForm('login')">← Girişe Dön</div>
+</div>
+</div></div>
+
+<!-- APP -->
 <div id="app" class="screen hidden">
-<div id="sidebar"><div id="sidebar-header"><div id="online-count">0 çevrimiçi</div><button class="btn-sm" onclick="showPanel('chat')">💬</button><button class="btn-sm" onclick="showPanel('friends')">👥</button><button class="btn-sm" onclick="showPanel('profile')">👤</button><button class="btn-sm" onclick="showPanel('shop')">🛒</button><button class="btn-sm" onclick="showPanel('groups')">📋</button><button class="btn-sm" onclick="showPanel('settings')">⚙️</button></div>
-<div id="panel-chat" class="panel"><div id="rooms"><div class="room-btn active" data-room="genel1" onclick="switchRoom('genel1')">#genel1</div><div class="room-btn" data-room="genel2" onclick="switchRoom('genel2')">#genel2</div><div class="room-btn" data-room="genel3" onclick="switchRoom('genel3')">#genel3</div></div></div>
-<div id="panel-friends" class="panel hidden"><input id="friend-username" type="text" placeholder="Kullanıcı adı"><button class="btn-sm" onclick="addFriend()">➕ Ekle</button><div id="friends-list"></div></div>
-<div id="panel-profile" class="panel hidden"><div id="profile-avatar" class="profile-avatar"></div><div id="profile-name"></div><div id="profile-username"></div><div id="profile-bio"></div><div id="profile-coins"></div><div id="profile-vip"></div><button class="btn-sm" onclick="showProfileEdit()">✏️ Düzenle</button><button class="btn-sm" onclick="doLogout()">🚪 Çıkış</button></div>
-<div id="panel-shop" class="panel hidden"><h3>🛒 Mağaza</h3><p>Çerçeve: <button class="btn-sm" onclick="buyItem('frame','gold')">Gold 50🪙</button><button class="btn-sm" onclick="buyItem('frame','rainbow')">Rainbow 100🪙</button><button class="btn-sm" onclick="buyItem('frame','fire')">Fire 150🪙</button><button class="btn-sm" onclick="buyItem('frame','star')">Star 200🪙</button></p><p>Efekt: <button class="btn-sm" onclick="buyItem('effect','sparkle')">✨ 30🪙</button><button class="btn-sm" onclick="buyItem('effect','rain')">🌧️ 40🪙</button><button class="btn-sm" onclick="buyItem('effect','fireworks')">🎆 60🪙</button></p><p><button class="btn-sm" onclick="buyItem('vip','1month')">VIP 1 Ay 500🪙</button></p></div>
-<div id="panel-groups" class="panel hidden"><input id="group-name" type="text" placeholder="Grup adı"><button class="btn-sm" onclick="createGroup()">➕ Oluştur</button><input id="group-invite-username" type="text" placeholder="Davet et"><button class="btn-sm" onclick="inviteToGroup()">📨 Davet</button><div id="groups-list"></div></div>
-<div id="panel-settings" class="panel hidden"><label>Tema</label><select id="profile-theme" onchange="toggleTheme()"><option value="dark">Karanlık</option><option value="light">Aydınlık</option></select><label>Küfür filtresi</label><input id="profile-filter" type="checkbox" onchange="toggleFilter()"><label>Çerçeve</label><select id="profile-frame" onchange="buyItem('frame',this.value)"><option value="none">Yok</option><option value="gold">Gold</option><option value="rainbow">Rainbow</option><option value="fire">Fire</option><option value="star">Star</option></select></div></div>
-<div id="chat-area"><div id="chat-header"><span id="chat-title">#genel1</span></div><div id="chat-messages"></div><div id="chat-input"><input id="msg-input" type="text" placeholder="Mesaj yaz..."><button onclick="sendMessage()">➤</button></div></div></div>
+<div id="sidebar">
+<div id="sidebar-header">
+<div id="online-count">🟢 0 çevrimiçi</div>
+<div class="sidebar-tabs">
+<button class="sidebar-tab active" onclick="showPanel('chat',this)">💬 Sohbet</button>
+<button class="sidebar-tab" onclick="showPanel('friends',this)">👥 Arkadaşlar</button>
+<button class="sidebar-tab" onclick="showPanel('groups',this)">👥 Gruplar</button>
+<button class="sidebar-tab" onclick="showPanel('profile',this)">👤 Profil</button>
+<button class="sidebar-tab" onclick="showPanel('shop',this)">🛒 Mağaza</button>
+<button class="sidebar-tab" onclick="showPanel('settings',this)">⚙️ Ayarlar</button>
+</div></div>
+<div id="panel-chat" class="panel">
+<div class="panel-title">📋 Kanallar</div>
+<div id="rooms">
+<div class="room-btn active" data-room="genel1" onclick="switchRoom('genel1')"># genel1 — Genel Sohbet 1</div>
+<div class="room-btn" data-room="genel2" onclick="switchRoom('genel2')"># genel2 — Genel Sohbet 2</div>
+<div class="room-btn" data-room="genel3" onclick="switchRoom('genel3')"># genel3 — Genel Sohbet 3</div>
+</div>
+<div class="panel-title" style="margin-top:12px">👤 Özel Mesajlar</div>
+<div id="dm-list"></div>
+</div>
+<div id="panel-friends" class="panel hidden">
+<div class="panel-title">➕ Arkadaş Ekle</div>
+<input id="friend-username" type="text" placeholder="kullaniciadi">
+<button class="btn-primary btn-sm" onclick="addFriend()">Ekle</button>
+<div id="friends-list"></div>
+</div>
+<div id="panel-profile" class="panel hidden">
+<div class="panel-title">👤 Profil</div>
+<div id="profile-avatar" class="profile-avatar"></div>
+<div id="profile-name"></div>
+<div id="profile-username"></div>
+<div id="profile-bio"></div>
+<div id="profile-coins"></div>
+<div id="profile-vip"></div>
+<button class="btn-primary btn-sm" onclick="showProfileEdit()">✏️ Düzenle</button>
+<button class="btn-danger btn-sm" onclick="doLogout()">🚪 Çıkış Yap</button>
+</div>
+<div id="panel-shop" class="panel hidden">
+<div class="panel-title">🛒 Mağaza</div>
+<div class="shop-cat">🌈 Çerçeve</div>
+<div class="shop-item"><span>Gold</span><button class="btn-sm" onclick="buyItem('frame','gold')">50🪙</button></div>
+<div class="shop-item"><span>Rainbow</span><button class="btn-sm" onclick="buyItem('frame','rainbow')">100🪙</button></div>
+<div class="shop-item"><span>Fire</span><button class="btn-sm" onclick="buyItem('frame','fire')">150🪙</button></div>
+<div class="shop-item"><span>Star</span><button class="btn-sm" onclick="buyItem('frame','star')">200🪙</button></div>
+<div class="shop-cat">✨ Efekt</div>
+<div class="shop-item"><span>Sparkle</span><button class="btn-sm" onclick="buyItem('effect','sparkle')">30🪙</button></div>
+<div class="shop-item"><span>Yağmur</span><button class="btn-sm" onclick="buyItem('effect','rain')">40🪙</button></div>
+<div class="shop-item"><span>Havai Fişek</span><button class="btn-sm" onclick="buyItem('effect','fireworks')">60🪙</button></div>
+<div class="shop-cat">👑 VIP</div>
+<div class="shop-item"><span>VIP 1 Ay</span><button class="btn-sm" onclick="buyItem('vip','1month')">500🪙</button></div>
+</div>
+<div id="panel-groups" class="panel hidden">
+<div class="panel-title">➕ Grup Oluştur</div>
+<input id="group-name" type="text" placeholder="Grup adı">
+<button class="btn-primary btn-sm" onclick="createGroup()">Oluştur</button>
+<div class="panel-title" style="margin-top:12px">📨 Davet Et</div>
+<input id="group-invite-username" type="text" placeholder="kullaniciadi">
+<button class="btn-primary btn-sm" onclick="inviteToGroup()">Davet</button>
+<div id="groups-list"></div>
+</div>
+<div id="panel-settings" class="panel hidden">
+<div class="panel-title">⚙️ Ayarlar</div>
+<label>Tema</label>
+<select id="profile-theme" onchange="toggleTheme()"><option value="dark">🌙 Karanlık</option><option value="light">☀️ Aydınlık</option></select>
+<label>Küfür filtresi</label>
+<input id="profile-filter" type="checkbox" onchange="toggleFilter()">
+<label>Çerçeve</label>
+<select id="profile-frame" onchange="buyItem('frame',this.value)"><option value="none">Yok</option><option value="gold">Gold</option><option value="rainbow">Rainbow</option><option value="fire">Fire</option><option value="star">Star</option></select>
+</div>
+</div>
+
+<div id="chat-area">
+<div id="chat-header"><span id="chat-title">💬 #genel1 — Genel Sohbet 1</span></div>
+<div id="chat-messages"></div>
+<div id="chat-input">
+<input id="msg-input" type="text" placeholder="Mesaj yaz... (Enter ile gönder)">
+<button onclick="sendMessage()">➤ Gönder</button>
+</div>
+</div></div>
+
 <script src="/js/app.js"></script>
-<script>setTimeout(function(){document.getElementById('splash').classList.add('hidden');document.getElementById('auth-screen').classList.remove('hidden');},2000);var token=localStorage.getItem('plamtr_token');if(token){fetch('/api/verify',{headers:{'x-token':token}}).then(function(r){return r.json();}).then(function(d){if(d.ok){user=d.user;document.getElementById('splash').classList.add('hidden');initApp();}});}</script>
 </body>
 </html>

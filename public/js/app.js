@@ -1,710 +1,346 @@
-// toast notification system
-function toast(msg, type) {
-  var c = document.getElementById('toast-container');
-  if (!c) return;
-  var t = document.createElement('div');
-  t.className = 'toast ' + (type || 'info');
-  t.textContent = msg;
+// ===== SİSTEM =====
+function beep(freq=800,dur=0.1){try{const a=new(window.AudioContext||window.webkitAudioContext)();const o=a.createOscillator();const g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=freq;o.type='sine';g.gain.setValueAtTime(0.3,a.currentTime);g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);o.start();o.stop(a.currentTime+dur)}catch(e){}}
+
+function toast(msg,type){
+  const c=document.getElementById('toast-container');
+  if(!c)return;
+  const t=document.createElement('div');
+  t.className='toast '+(type||'info');
+  t.textContent=msg;
   c.appendChild(t);
-  // play click sound
-  try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQoA').play(); } catch(e) {}
-  setTimeout(function() { t.classList.add('show'); }, 10);
-  setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 300); }, 3500);
+  if(type==='success')beep(1200,0.15);
+  else if(type==='error')beep(300,0.2);
+  else if(type==='warning')beep(600,0.15);
+  else beep(800,0.1);
+  requestAnimationFrame(()=>{requestAnimationFrame(()=>t.classList.add('show'))});
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),400)},4000);
 }
-function clickSound() {
-  try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQoA').play(); } catch(e) {}
+
+let token=localStorage.getItem('plamtr_token')||'';
+let user=null;
+let ws=null;
+let currentRoom='genel1';
+
+async function api(method,path,body){
+  const headers={'Content-Type':'application/json'};
+  if(token)headers['x-token']=token;
+  const r=await fetch('/api'+path,{method,headers,body:body?JSON.stringify(body):undefined});
+  const d=await r.json();
+  if(d.error)throw new Error(d.error);
+  return d;
 }
 
-let token = localStorage.getItem('plamtr_token');
-let ws = null;
-let user = null;
-let currentRoom = 'genel1';
-let currentChat = null; // 'dm:username' or 'group:id'
-let onlineUsers = {};
-let friends = [];
-let pendingFriends = [];
-let groups = [];
-let keypair = null;
-let peerConnections = {};
+// ===== SPLASH =====
+setTimeout(()=>{document.getElementById('splash').style.display='none';if(token)initApp();else showAuthForm('login');},1800);
 
-const ROOMS = ['genel1','genel2','genel3'];
-const TG_CHANNEL = 'https://t.me/plamtr';
-
-// splash -> auth
-setTimeout(() => {
-  document.getElementById('splash').classList.add('hidden');
-  if (token) {
-    document.getElementById('auth-screen').classList.add('hidden');
-    initApp();
-  } else {
-    document.getElementById('auth-screen').classList.remove('hidden');
-  }
-}, 2000);
-
-// tabs
-document.getElementById('tab-login').onclick = () => switchAuthTab('login');
-document.getElementById('tab-register').onclick = () => switchAuthTab('register');
-
-function switchAuthTab(tab) {
-  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-' + tab).classList.add('active');
-  document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
-  document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
-  document.getElementById('forgot-form').classList.add('hidden');
+// ===== AUTH FORMS =====
+function showAuthForm(which){
+  document.getElementById('auth-screen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  ['login-form','register-form','forgot-form'].forEach(id=>document.getElementById(id).classList.add('hidden'));
   document.getElementById('about-screen').classList.add('hidden');
+  document.getElementById('tab-login').classList.toggle('active',which==='login');
+  document.getElementById('tab-register').classList.toggle('active',which==='register');
+  document.getElementById(which==='forgot'?'forgot-form':which+'-form').classList.remove('hidden');
+}
+function showForgot(){document.getElementById('auth-screen').classList.remove('hidden');['login-form','register-form'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('forgot-form').classList.remove('hidden');document.getElementById('about-screen').classList.add('hidden')}
+function showAbout(){document.getElementById('auth-screen').classList.remove('hidden');['login-form','register-form','forgot-form'].forEach(id=>document.getElementById(id).classList.add('hidden'));document.getElementById('about-screen').classList.remove('hidden')}
+
+function togglePass(id,btn){
+  const inp=document.getElementById(id);
+  if(inp.type==='password'){inp.type='text';btn.textContent='🙈'}
+  else{inp.type='password';btn.textContent='👁️'}
 }
 
-function showAuthForm(name) {
-  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.auth-form').forEach(f => f.classList.add('hidden'));
-  if (name === 'login') {
-    document.getElementById('login-form').classList.remove('hidden');
-    document.getElementById('tab-login').classList.add('active');
-  } else if (name === 'register') {
-    document.getElementById('register-form').classList.remove('hidden');
-    document.getElementById('tab-register').classList.add('active');
+// ===== REGISTER =====
+async function checkUsername(){
+  const v=document.getElementById('reg-username').value.trim().toLowerCase();
+  const h=document.getElementById('reg-username-hint');
+  if(!v){h.textContent='';return}
+  if(v.length<3){h.textContent='❌ Çok kısa';return}
+  try{
+    const d=await api('GET','/check-username?u='+encodeURIComponent(v));
+    h.textContent=d.taken?'❌ Bu isim alınmış':'✅ Bu isim müsait';
+  }catch(e){}
+}
+function showCustomQuestion(){
+  document.getElementById('custom-question-wrap').classList.toggle('hidden',document.getElementById('reg-question').value!=='custom');
+}
+function checkStrength(){
+  const pw=document.getElementById('reg-password').value;
+  const len=pw.length>=8&&pw.length<=20;
+  const upper=/[A-Z]/.test(pw);
+  const lower=/[a-z]/.test(pw);
+  const num=/[0-9]/.test(pw);
+  const score=[len,upper,lower,num].filter(Boolean).length;
+  const fill=document.getElementById('strength-fill');
+  const txt=document.getElementById('strength-text');
+  const colors=['#b71c1c','#e65100','#f9a825','#0a8f3c'];
+  const labels=['Zayıf','Orta','İyi','Güçlü'];
+  fill.style.width=(score*25)+'%';
+  fill.style.background=colors[score-1]||colors[0];
+  txt.textContent=score===0?'':labels[score-1];
+  txt.style.color=colors[score-1];
+  document.getElementById('rule-len').classList.toggle('ok',len);
+  document.getElementById('rule-upper').classList.toggle('ok',upper);
+  document.getElementById('rule-lower').classList.toggle('ok',lower);
+  document.getElementById('rule-num').classList.toggle('ok',num);
+}
+async function doRegister(){
+  const username=document.getElementById('reg-username').value.trim().toLowerCase();
+  const email=document.getElementById('reg-email').value.trim();
+  const questionId=document.getElementById('reg-question').value;
+  const questionText=questionId==='custom'?document.getElementById('reg-custom-question').value.trim():'';
+  const answer=document.getElementById('reg-answer').value.trim();
+  const pw=document.getElementById('reg-password').value;
+  const pw2=document.getElementById('reg-password2').value;
+  if(!username){toast('Kullanıcı adı gerekli!','warning');return}
+  if(!answer){toast('Güvenlik sorusunun cevabı gerekli!','warning');return}
+  if(pw.length<8||pw.length>20){toast('Şifre 8-20 karakter olmalı!','warning');return}
+  if(!/[A-Z]/.test(pw)){toast('Şifre büyük harf içermeli!','warning');return}
+  if(!/[a-z]/.test(pw)){toast('Şifre küçük harf içermeli!','warning');return}
+  if(!/[0-9]/.test(pw)){toast('Şifre rakam içermeli!','warning');return}
+  if(pw!==pw2){toast('Şifreler eşleşmiyor!','warning');return}
+  try{
+    const d=await api('POST','/register',{fullName:username,username,email,questionId,questionText,answer,password:pw});
+    token=d.token;user=d.user;
+    localStorage.setItem('plamtr_token',token);
+    toast('Kayıt başarılı! 200 coin kazandın 🪙','success');
+    initApp();
+  }catch(e){toast('Kayıt başarısız: '+e.message,'error')}
+}
+
+// ===== LOGIN =====
+async function doLogin(){
+  const username=document.getElementById('login-username').value.trim().toLowerCase();
+  const password=document.getElementById('login-password').value;
+  if(!username||!password){toast('Kullanıcı adı ve şifre gerekli!','warning');return}
+  try{
+    const d=await api('POST','/login',{username,password});
+    token=d.token;user=d.user;
+    localStorage.setItem('plamtr_token',token);
+    toast('Giriş başarılı! Yönlendiriliyorsun…','success');
+    initApp();
+  }catch(e){toast('Giriş başarısız: '+e.message,'error')}
+}
+
+// ===== FORGOT =====
+async function forgotQuestion(){
+  const u=document.getElementById('forgot-username').value.trim().toLowerCase();
+  try{
+    const d=await api('POST','/forgot/question',{username:u});
+    document.getElementById('forgot-q-text').textContent='🔑 '+d.question;
+    document.getElementById('forgot-answer-wrap').classList.remove('hidden');
+  }catch(e){toast(e.message,'error')}
+}
+async function forgotEmail(){
+  const u=document.getElementById('forgot-username').value.trim().toLowerCase();
+  try{
+    await api('POST','/forgot/email',{username:u});
+    document.getElementById('forgot-info').textContent='📧 Kod e-postana gönderildi.';
+    document.getElementById('forgot-code-wrap').classList.remove('hidden');
+  }catch(e){toast(e.message,'error')}
+}
+async function submitForgotAnswer(){
+  const u=document.getElementById('forgot-username').value.trim().toLowerCase();
+  const a=document.getElementById('forgot-answer').value.trim();
+  try{
+    await api('POST','/forgot/answer',{username:u,answer:a});
+    document.getElementById('forgot-code-wrap').classList.remove('hidden');
+    toast('Cevap doğru! Kodu gir.','success');
+  }catch(e){toast('Cevap yanlış!','error')}
+}
+async function doResetPw(){
+  const u=document.getElementById('forgot-username').value.trim().toLowerCase();
+  const code=document.getElementById('forgot-code').value.trim();
+  const pw=document.getElementById('forgot-newpw').value;
+  try{
+    await api('POST','/forgot/reset',{username:u,code,password:pw});
+    toast('Şifre sıfırlandı! Giriş yap.','success');
+    showAuthForm('login');
+  }catch(e){toast(e.message,'error')}
+}
+
+// ===== APP INIT =====
+function initApp(){
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  updateProfile();
+  connectWS();
+  loadHistory();
+  showPanel('chat');
+}
+function updateProfile(){
+  document.getElementById('profile-name').textContent=user.displayName;
+  document.getElementById('profile-username').textContent='@'+user.username;
+  document.getElementById('profile-coins').textContent='🪙 '+user.coins+' Coin';
+  document.getElementById('profile-vip').textContent=user.vip?'👑 VIP':'👤 Normal';
+}
+function connectWS(){
+  ws=new WebSocket('ws://localhost:3000/ws/'+token);
+  ws.onmessage=async(e)=>{
+    const d=JSON.parse(e.data);
+    if(d.type==='message')addMessage(d);
+    if(d.type==='online')document.getElementById('online-count').textContent='🟢 '+d.count+' çevrimiçi';
+    if(d.type==='call_offer'){await handleCallOffer(d)}
+    if(d.type==='call_answer'){const pc=peerConnections[d.from];if(pc)await pc.setRemoteDescription(new RTCSessionDescription(d.answer))}
+    if(d.type==='ice_candidate'){const pc=peerConnections[d.from];if(pc)await pc.addIceCandidate(new RTCIceCandidate(d.candidate))}
+  };
+}
+async function loadHistory(){
+  try{
+    const d=await api('GET','/history?room='+currentRoom);
+    document.getElementById('chat-messages').innerHTML='';
+    d.messages.forEach(m=>addMessage(m,true));
+  }catch(e){}
+}
+function addMessage(m,noScroll){
+  const el=document.createElement('div');
+  const isOwn=m.userId===user.id;
+  el.className='msg '+(isOwn?'own':'other');
+  const name=isOwn?user.displayName:(m.displayName||m.username);
+  const time=new Date(m.ts).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  el.innerHTML='<div class="msg-name">'+name+'</div><div class="msg-text"></div><div class="msg-time">'+time+'</div>';
+  el.querySelector('.msg-text').textContent=m.text;
+  if(!noScroll)beep(880,0.08);
+  const box=document.getElementById('chat-messages');
+  box.appendChild(el);
+  box.scrollTop=box.scrollHeight;
+}
+function sendMessage(){
+  const inp=document.getElementById('msg-input');
+  const text=inp.value.trim();
+  if(!text)return;
+  api('POST','/message',{room:currentRoom,text}).then(()=>{
+    inp.value='';
+  }).catch(e=>toast(e.message,'error'));
+}
+function switchRoom(room){
+  currentRoom=room;
+  document.querySelectorAll('.room-btn').forEach(b=>b.classList.toggle('active',b.dataset.room===room));
+  const titles={genel1:'#genel1 — Genel Sohbet 1',genel2:'#genel2 — Genel Sohbet 2',genel3:'#genel3 — Genel Sohbet 3'};
+  document.getElementById('chat-title').textContent='💬 '+(titles[room]||room);
+  loadHistory();
+}
+
+// ===== PANELS =====
+function showPanel(name,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));
+  document.getElementById('panel-'+name).classList.remove('hidden');
+  document.querySelectorAll('.sidebar-tab').forEach(t=>t.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  else{
+    const tabs={chat:0,friends:1,groups:2,profile:3,shop:4,settings:5};
+    document.querySelectorAll('.sidebar-tab')[tabs[name]]?.classList.add('active');
   }
 }
 
-function showCustomQuestion() {
-  document.getElementById('custom-question-wrap').classList.toggle('hidden', document.getElementById('reg-question').value !== 'custom');
+// ===== FRIENDS =====
+async function addFriend(){
+  const u=document.getElementById('friend-username').value.trim().toLowerCase();
+  try{await api('POST','/friend/add',{username:u});toast('Arkadaş eklendi!','success');document.getElementById('friend-username').value='';loadFriends()}catch(e){toast(e.message,'error')}
+}
+async function loadFriends(){
+  try{
+    const d=await api('GET','/friends');
+    document.getElementById('friends-list').innerHTML=d.friends.map(f=>'<div style="padding:8px 0;border-bottom:1px solid #21262d">'+f.displayName+' <span style="color:#8b949e">(@'+f.username+')</span></div>').join('');
+  }catch(e){}
 }
 
-function showForgot() {
-  document.querySelectorAll('.auth-form').forEach(f => f.classList.add('hidden'));
-  document.getElementById('forgot-form').classList.remove('hidden');
+// ===== GROUPS =====
+async function createGroup(){
+  const name=document.getElementById('group-name').value.trim();
+  try{await api('POST','/group/create',{name});toast('Grup oluşturuldu!','success');document.getElementById('group-name').value='';}catch(e){toast(e.message,'error')}
+}
+async function inviteToGroup(){
+  const u=document.getElementById('group-invite-username').value.trim().toLowerCase();
+  try{await api('POST','/group/invite',{username:u});toast('Davet gönderildi!','success');document.getElementById('group-invite-username').value='';}catch(e){toast(e.message,'error')}
 }
 
-function showAbout() {
-  document.querySelectorAll('.auth-form').forEach(f => f.classList.add('hidden'));
-  document.getElementById('about-screen').classList.remove('hidden');
+// ===== SHOP =====
+async function buyItem(type,id){
+  try{await api('POST','/buy',{type,id});toast('Satın alındı!','success');updateProfile()}catch(e){toast(e.message,'error')}
 }
 
-// username check
-async function checkUsername() {
-  const v = document.getElementById('reg-username').value.trim().toLowerCase();
-  const h = document.getElementById('reg-username-hint');
-  if (!v) { h.textContent = ''; return; }
-  if (!/^[a-z0-9_]{3,20}$/.test(v)) { h.textContent = '❌ 3-20 karakter, küçük harf/rakam/_'; return; }
-  const r = await fetch('/api/username-check/' + encodeURIComponent(v));
-  const d = await r.json();
-  h.textContent = d.taken ? '❌ Bu kullanıcı adı alınmış' : '✅ Müsait';
+// ===== SETTINGS =====
+function toggleTheme(){
+  const t=document.getElementById('profile-theme').value;
+  document.body.classList.toggle('light',t==='light');
+  api('POST','/settings',{theme:t});
+}
+function toggleFilter(){api('POST','/settings',{filter:document.getElementById('profile-filter').checked})}
+
+// ===== PROFILE EDIT =====
+function showProfileEdit(){
+  const bio=prompt('Bio:',user.bio||'');
+  if(bio!==null)api('POST','/profile',{bio}).then(()=>{user.bio=bio;updateProfile();toast('Profil güncellendi!','success')});
 }
 
-// auth
-async function doLogin() {
-  const username = document.getElementById('login-username').value.trim().toLowerCase();
-  const password = document.getElementById('login-password').value;
-  if (!username || !password) { toast('Kullanıcı adı ve şifre gerekli!', 'warning'); return; }
-  const r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password}) });
-  const d = await r.json();
-  if (d.error) { toast('Giriş başarısız! ' + d.error, 'error'); return; }
-  token = d.token;
-  user = d.user;
-  localStorage.setItem('plamtr_token', token);
-  toast('Giriş başarılı! Yönlendiriliyorsunuz…', 'success');
-  document.getElementById('auth-screen').classList.add('hidden');
-  initApp();
+// ===== CALLS =====
+let peerConnections={};let localStream=null;let callInProgress=false;
+async function startCall(userId,type){
+  callInProgress=true;
+  const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  peerConnections[userId]=pc;
+  try{
+    localStream=await navigator.mediaDevices.getUserMedia({video:type==='video',audio:true});
+  }catch(e){toast('Kamera/mikrofon izni gerekli!','error');callInProgress=false;return}
+  if(localStream){
+    localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+  }
+  const offer=await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  ws.send(JSON.stringify({type:'call_offer',to:userId,callType:type,offer:pc.localDescription}));
+}
+async function handleCallOffer(d){
+  const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  peerConnections[d.from]=pc;
+  if(d.callType==='audio'||d.callType==='video'){
+    try{
+      localStream=await navigator.mediaDevices.getUserMedia({video:d.callType==='video',audio:true});
+      localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+    }catch(e){}
+  }
+  await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
+  const answer=await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  ws.send(JSON.stringify({type:'call_answer',to:d.from,answer:pc.localDescription}));
+}
+function endCall(){
+  for(const id in peerConnections){peerConnections[id].close();delete peerConnections[id]}
+  if(localStream)localStream.getTracks().forEach(t=>t.stop());
+  callInProgress=false;
 }
 
-async function doRegister() {
-  const username = document.getElementById('reg-username').value.trim().toLowerCase();
-  const email = document.getElementById('reg-email').value.trim();
-  const questionId = document.getElementById('reg-question').value;
-  const questionText = questionId === 'custom' ? document.getElementById('reg-custom-question').value.trim() : '';
-  const answer = document.getElementById('reg-answer').value.trim();
-  const pw = document.getElementById('reg-password').value;
-  const pw2 = document.getElementById('reg-password2').value;
-  if (pw.length < 8 || pw.length > 20) { toast('Şifre 8-20 karakter olmalı!', 'warning'); return; }
-  if (!/[A-Z]/.test(pw)) { toast('Şifre büyük harf içermeli!', 'warning'); return; }
-  if (!/[a-z]/.test(pw)) { toast('Şifre küçük harf içermeli!', 'warning'); return; }
-  if (!/[0-9]/.test(pw)) { toast('Şifre rakam içermeli!', 'warning'); return; }
-  if (pw !== pw2) { toast('Şifreler eşleşmiyor!', 'warning'); return; }
-  const r = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fullName,username,email,questionId,questionText,answer,password:pw}) });
-  const d = await r.json();
-  if (d.error) { toast('Kayıt başarısız! ' + d.error, 'error'); return; }
-  token = d.token;
-  user = d.user;
-  localStorage.setItem('plamtr_token', token);
-  toast('Kayıt başarılı! Giriş yapıyorsun…', 'success');
-  document.getElementById('auth-screen').classList.add('hidden');
-  initApp();
+// ===== ADMIN =====
+async function checkAdmin(){
+  try{const d=await api('GET','/admin/check');return d.admin}catch(e){return false}
 }
+async function adminLookup(){
+  const u=document.getElementById('admin-username').value.trim().toLowerCase();
+  try{
+    const d=await api('POST','/admin/lookup',{username:u});
+    document.getElementById('admin-result').innerHTML='<p><b>'+d.user.displayName+'</b> (@'+d.user.username+')</p><p>Coin: '+d.user.coins+' | VIP: '+(d.user.vip?'✅':'❌')+'</p><p>Yasaklı: '+(d.user.banned?'⛔':'Hayır')+'</p><div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px"><button class="btn-sm" onclick="adminBan(\''+d.user.username+'\')">⛔ Yasakla</button><button class="btn-sm" onclick="adminVip(\''+d.user.username+'\',true)">👑 VIP</button><button class="btn-sm" onclick="adminCoins(\''+d.user.username+'\')">🪙 Coin</button></div>';
+  }catch(e){toast(e.message,'error')}
+}
+async function adminBan(u){const r=prompt('Sebebi:')||'Admin yasağı';await api('POST','/admin/ban',{username:u,reason:r});toast('Yasaklandı','success')}
+async function adminVip(u,s){await api('POST','/admin/vip',{username:u,set:s});toast(s?'VIP verildi':'VIP alındı','success')}
+async function adminCoins(u){const a=parseInt(prompt('Coin (+/-):')||'0');await api('POST','/admin/coins',{username:u,amount:a});toast('Coin güncellendi','success')}
 
-async function doLogout() {
-  await fetch('/api/logout', { method:'POST', headers:{'x-token':token} });
+// ===== LOGOUT =====
+function doLogout(){
+  token='';user=null;
   localStorage.removeItem('plamtr_token');
-  location.reload();
-}
-
-// forgot password
-let forgotData = {};
-async function forgotQuestion() {
-  const username = document.getElementById('forgot-username').value.trim().toLowerCase();
-  if (!username) { alert('Kullanıcı adını yaz.'); return; }
-  const r = await fetch('/api/user/' + encodeURIComponent(username));
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  const qId = d.user.recoveryQuestionId;
-  const q = document.getElementById('forgot-q-text');
-  if (qId === 'custom') q.textContent = d.user.recoveryQuestionText || 'Kendi sorun:';
-  else q.textContent = d.user.recoveryQuestionId || 'Cevabını yaz';
-  forgotData.username = username;
-  document.getElementById('forgot-answer-wrap').classList.remove('hidden');
-}
-
-async function forgotEmail() {
-  const username = document.getElementById('forgot-username').value.trim().toLowerCase();
-  if (!username) { alert('Kullanıcı adını yaz.'); return; }
-  const r = await fetch('/api/forgot', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,method:'email'}) });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  document.getElementById('forgot-info').textContent = '📧 Kod e-postana gönderildi: ' + d.email;
-  forgotData = { username, code: d.code };
-  document.getElementById('forgot-answer-wrap').classList.add('hidden');
-  document.getElementById('forgot-code-wrap').classList.remove('hidden');
-}
-
-async function submitForgotAnswer() {
-  const answer = document.getElementById('forgot-answer').value.trim();
-  const r = await fetch('/api/forgot', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:forgotData.username,method:'question',answer}) });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  forgotData.code = d.code;
-  document.getElementById('forgot-answer-wrap').classList.add('hidden');
-  document.getElementById('forgot-code-wrap').classList.remove('hidden');
-  document.getElementById('forgot-info').textContent = '📨 Kod gönderildi.';
-}
-
-async function doResetPw() {
-  const code = document.getElementById('forgot-code').value.trim();
-  const newPw = document.getElementById('forgot-newpw').value;
-  if (!code || code.length !== 6) { alert('6 haneli kodu gir.'); return; }
-  const r = await fetch('/api/resetpw', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:forgotData.username,code,newPassword:newPw}) });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  alert('✅ Şifren sıfırlandı! Giriş yapabilirsin.');
+  if(ws)ws.close();
   showAuthForm('login');
 }
 
-// ---- APP ----
-function initApp() {
-  document.getElementById('app').classList.remove('hidden');
-  document.getElementById('chat-title').textContent = '#genel1';
-  loadProfile();
-  loadFriends();
-  loadGroups();
-  connectWS();
-}
+// Enter ile mesaj gönder
+document.getElementById('msg-input').addEventListener('keydown',(e)=>{if(e.key==='Enter')sendMessage()});
 
-function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(proto + '//' + location.host);
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ type:'auth', token }));
-  };
-  ws.onmessage = (e) => {
-    try {
-      const d = JSON.parse(e.data);
-      handleWS(d);
-    } catch(ex) {}
-  };
-  ws.onclose = () => { setTimeout(connectWS, 2000); };
-}
-
-function handleWS(d) {
-  if (d.type === 'auth_ok') {
-    ws.send(JSON.stringify({ type:'join', room:'genel1' }));
-    return;
-  }
-  if (d.type === 'joined') {
-    document.getElementById('chat-messages').innerHTML = '';
-    addSystemMsg('💬 ' + d.room + ' odasına katıldın');
-    return;
-  }
-  if (d.type === 'message') {
-    if (d.room === currentRoom || (d.room === 'dm' && d.from === user.id) || (d.room === 'dm' && d.to === user.id)) {
-      addMessage(d);
-    }
-    return;
-  }
-  if (d.type === 'user_online') {
-    onlineUsers[d.uid] = true;
-    updateOnlineCount();
-    return;
-  }
-  if (d.type === 'user_offline') {
-    delete onlineUsers[d.uid];
-    updateOnlineCount();
-    return;
-  }
-  if (d.type === 'friend_request') {
-    pendingFriends.push({ username: d.from, name: d.fromName });
-    updateFriendsPanel();
-    addSystemMsg('👤 ' + d.fromName + ' arkadaşlık isteği gönderdi');
-    return;
-  }
-  if (d.type === 'friend_accepted') {
-    loadFriends();
-    addSystemMsg('✅ ' + d.from + ' arkadaşlık isteğini kabul etti');
-    return;
-  }
-  if (d.type === 'group_invite') {
-    addSystemMsg('📨 ' + d.from + ' seni "' + d.groupName + '" grubuna davet etti');
-    return;
-  }
-  if (d.type === 'heavy_alert') {
-    addSystemMsg('🚨 ' + d.displayName + ' ağır ihlal: ' + d.reasons.join(', '));
-    return;
-  }
-  if (d.type === 'admin_broadcast') {
-    addSystemMsg(d.message);
-    return;
-  }
-  if (d.type === 'banned') {
-    alert('⛔ Hesabın yasaklandı: ' + d.reason);
-    doLogout();
-    return;
-  }
-  if (d.type === 'warn') {
-    addSystemMsg('⚠️ Uyarı: ' + d.reason);
-    return;
-  }
-  if (d.type === 'call_offer' || d.type === 'call_answer' || d.type === 'ice_candidate') {
-    handleCall(d);
-    return;
-  }
-  if (d.type === 'typing') {
-    // typing indicator
-    return;
-  }
-  if (d.type === 'pong') {}
-}
-
-function updateOnlineCount() {
-  const count = Object.keys(onlineUsers).length;
-  document.getElementById('online-count').textContent = count + ' çevrimiçi';
-}
-
-function addSystemMsg(text) {
-  const el = document.createElement('div');
-  el.className = 'msg system';
-  el.textContent = text;
-  document.getElementById('chat-messages').appendChild(el);
-  el.scrollIntoView({ behavior:'smooth' });
-}
-
-function addMessage(d) {
-  const el = document.createElement('div');
-  const isOwn = d.from === user.id;
-  el.className = 'msg ' + (isOwn ? 'own' : 'other');
-  if (d.frame && d.frame !== 'none') el.style.border = '2px solid ' + getFrameColor(d.frame);
-  let html = '';
-  if (!isOwn) {
-    const roleClass = d.role === 'admin' ? 'admin' : d.vip ? 'vip' : '';
-    html += '<div class="name ' + roleClass + '">' + (d.displayName || d.username) + (d.vip ? ' 👑' : '') + (d.role === 'admin' ? ' 🔴ADMİN' : '') + '</div>';
-  }
-  html += '<div>' + d.text + '</div>';
-  html += '<div class="time">' + formatTime(d.time) + '</div>';
-  el.innerHTML = html;
-  document.getElementById('chat-messages').appendChild(el);
-  el.scrollIntoView({ behavior:'smooth' });
-}
-
-function getFrameColor(frame) {
-  const colors = { gold:'#ffd700', rainbow:'linear-gradient(90deg,red,orange,yellow,green,blue,violet)', fire:'#ff4500', star:'#ff69b4' };
-  return colors[frame] || '#888';
-}
-
-function formatTime(ts) {
-  const d = new Date(ts);
-  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
-}
-
-// send message
-function sendMessage() {
-  const input = document.getElementById('msg-input');
-  const text = input.value.trim();
-  if (!text || !ws) return;
-  if (currentChat && currentChat.startsWith('dm:')) {
-    ws.send(JSON.stringify({ type:'message', text, room:'dm', to:currentChat.slice(3) }));
-  } else if (currentChat && currentChat.startsWith('group:')) {
-    ws.send(JSON.stringify({ type:'message', text, room:currentChat.slice(6) }));
-  } else {
-    ws.send(JSON.stringify({ type:'message', text, room:currentRoom }));
-  }
-  input.value = '';
-}
-
-document.getElementById('msg-input').onkeydown = (e) => { if (e.key === 'Enter') sendMessage(); };
-
-// sidebar navigation
-function showPanel(name) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
-  document.getElementById('panel-' + name).classList.remove('hidden');
-}
-
-function switchRoom(room) {
-  currentRoom = room;
-  currentChat = null;
-  document.getElementById('chat-title').textContent = '#' + room;
-  document.querySelectorAll('.room-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.querySelector('.room-btn[data-room="' + room + '"]');
-  if (btn) btn.classList.add('active');
-  document.getElementById('chat-messages').innerHTML = '';
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'join', room }));
-}
-
-function openDM(username, uid) {
-  currentRoom = 'dm';
-  currentChat = 'dm:' + uid;
-  document.getElementById('chat-title').textContent = '💬 ' + username;
-  document.getElementById('chat-messages').innerHTML = '';
-  addSystemMsg('Özel sohbet: ' + username);
-}
-
-function openGroupChat(groupId, name) {
-  currentRoom = 'group';
-  currentChat = 'group:' + groupId;
-  document.getElementById('chat-title').textContent = '👥 ' + name;
-  document.getElementById('chat-messages').innerHTML = '';
-  addSystemMsg('Grup: ' + name);
-}
-
-// profile
-async function loadProfile() {
-  const r = await fetch('/api/profile', { headers:{'x-token':token} });
-  const d = await r.json();
-  if (d.user) user = d.user;
-  renderProfile();
-}
-
-function renderProfile() {
-  document.getElementById('profile-name').textContent = user.displayName;
-  document.getElementById('profile-username').textContent = '@' + user.username;
-  document.getElementById('profile-bio').textContent = user.bio || 'Biyografi yok';
-  document.getElementById('profile-coins').textContent = '🪙 ' + user.coins;
-  document.getElementById('profile-vip').textContent = user.vip ? '👑 VIP' : 'Standart';
-  const avatar = document.getElementById('profile-avatar');
-  avatar.className = 'profile-avatar' + (user.vip ? ' vip' : '') + (user.role === 'admin' ? ' admin' : '');
-  if (user.photo) avatar.style.backgroundImage = 'url(/api/file/' + user.photo.split('/').pop() + ')';
-  else avatar.textContent = user.displayName[0].toUpperCase();
-  document.getElementById('profile-theme').value = user.theme;
-  document.getElementById('profile-filter').checked = user.filterOn;
-  document.getElementById('profile-frame').value = user.frame || 'none';
-}
-
-async function saveProfile() {
-  const displayName = document.getElementById('profile-dname').value.trim() || user.displayName;
-  const bio = document.getElementById('profile-bio-edit').value.trim();
-  const r = await fetch('/api/profile', { method:'PUT', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({displayName,bio}) });
-  const d = await r.json();
-  if (d.ok) { user = d.user; renderProfile(); alert('✅ Profil güncellendi.'); }
-}
-
-async function toggleTheme() {
-  const theme = document.getElementById('profile-theme').value;
-  await fetch('/api/profile', { method:'PUT', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({theme}) });
-  document.body.className = theme === 'dark' ? '' : 'light';
-}
-
-async function toggleFilter() {
-  const filterOn = document.getElementById('profile-filter').checked;
-  await fetch('/api/profile', { method:'PUT', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({filterOn}) });
-}
-
-// friends
-async function loadFriends() {
-  const r = await fetch('/api/profile', { headers:{'x-token':token} });
-  const d = await r.json();
-  if (d.user) {
-    user = d.user;
-    friends = d.user.friends || [];
-    pendingFriends = d.user.pendingFriends || [];
-    updateFriendsPanel();
-  }
-}
-
-function updateFriendsPanel() {
-  const list = document.getElementById('friends-list');
-  if (!list) return;
-  let html = '';
-  // pending
-  for (const id of pendingFriends) {
-    html += '<div class="user-item">';
-    html += '<span class="status offline"></span>';
-    html += '<span>Bekleyen istek #' + id.slice(0,6) + '</span>';
-    html += '<button class="btn-sm" onclick="acceptFriend(\'' + id + '\')">✓</button>';
-    html += '<button class="btn-sm" onclick="declineFriend(\'' + id + '\')">✗</button>';
-    html += '</div>';
-  }
-  // friends
-  for (const id of (friends || [])) {
-    const online = onlineUsers[id];
-    html += '<div class="user-item" onclick="openDM(\'' + (user?.username || '') + '\',\'' + id + '\')">';
-    html += '<span class="status ' + (online ? 'online' : 'offline') + '"></span>';
-    html += '<span>' + id.slice(0,8) + '...' + (online ? ' 🟢' : '') + '</span>';
-    html += '</div>';
-  }
-  if (!html) html = '<p style="color:#888;font-size:13px">Henüz arkadaşın yok.</p>';
-  list.innerHTML = html;
-}
-
-async function addFriend() {
-  const username = document.getElementById('friend-username').value.trim().toLowerCase();
-  if (!username) return;
-  const r = await fetch('/api/friends/add', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username}) });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  alert('✅ İstek gönderildi.');
-}
-
-async function acceptFriend(id) {
-  await fetch('/api/friends/accept', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({id}) });
-  loadFriends();
-}
-
-async function declineFriend(id) {
-  await fetch('/api/friends/decline', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({id}) });
-  loadFriends();
-}
-
-// groups
-async function loadGroups() {
-  const r = await fetch('/api/groups', { headers:{'x-token':token} });
-  const d = await r.json();
-  if (d.groups) groups = d.groups;
-  updateGroupsPanel();
-}
-
-function updateGroupsPanel() {
-  const list = document.getElementById('groups-list');
-  if (!list) return;
-  let html = '';
-  for (const g of groups) {
-    html += '<div class="user-item" onclick="openGroupChat(\'' + g.id + '\',\'' + g.name + '\')">';
-    html += '<span>👥 ' + g.name + ' (' + g.members.length + ')</span>';
-    html += '</div>';
-  }
-  if (!html) html = '<p style="color:#888;font-size:13px">Henüz grubun yok.</p>';
-  list.innerHTML = html;
-}
-
-async function createGroup() {
-  const name = document.getElementById('group-name').value.trim();
-  if (!name) return;
-  const r = await fetch('/api/groups', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({name}) });
-  const d = await r.json();
-  if (d.ok) { loadGroups(); alert('✅ Grup oluşturuldu.'); }
-}
-
-async function inviteToGroup() {
-  const username = document.getElementById('group-invite-username').value.trim().toLowerCase();
-  if (!username) return;
-  const g = groups[0]; // ilk gruba davet et
-  if (!g) { alert('Önce grup oluştur.'); return; }
-  const r = await fetch('/api/groups/' + g.id + '/invite', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username}) });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  alert('✅ Davet gönderildi.');
-}
-
-// shop
-async function buyItem(kind, id) {
-  const r = await fetch('/api/shop/buy', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({kind,id}) });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  user = d.user;
-  renderProfile();
-  alert('✅ Satın alındı! Kalan coin: ' + d.coins);
-}
-
-// upload
-async function uploadFile() {
-  const fileInput = document.getElementById('file-input');
-  const file = fileInput.files[0];
-  if (!file) return;
-  const fd = new FormData();
-  fd.append('file', file);
-  const r = await fetch('/api/upload', { method:'POST', headers:{'x-token':token}, body:fd });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  ws.send(JSON.stringify({ type:'message', text:'📎 ' + d.name + ' (' + (d.size/1024).toFixed(1) + 'KB) - /api/file/' + d.file.split('/').pop(), room:currentRoom }));
-  fileInput.value = '';
-}
-
-// photo upload
-async function uploadPhoto() {
-  const fi = document.getElementById('photo-input');
-  const file = fi.files[0]; if (!file) return;
-  const fd = new FormData(); fd.append('file', file);
-  const r = await fetch('/api/photo', { method:'POST', headers:{'x-token':token}, body:fd });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  user = d.user; renderProfile(); alert('✅ Profil fotoğrafı güncellendi.');
-}
-
-async function uploadAnimated() {
-  const fi = document.getElementById('animated-input');
-  const file = fi.files[0]; if (!file) return;
-  const fd = new FormData(); fd.append('file', file);
-  const r = await fetch('/api/animatedphoto', { method:'POST', headers:{'x-token':token}, body:fd });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  user = d.user; renderProfile(); alert('✅ Hareketli profil güncellendi.');
-}
-
-async function uploadBackground() {
-  const fi = document.getElementById('bg-input');
-  const file = fi.files[0]; if (!file) return;
-  const fd = new FormData(); fd.append('file', file);
-  const r = await fetch('/api/background', { method:'POST', headers:{'x-token':token}, body:fd });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  user = d.user; renderProfile(); alert('✅ Arka plan güncellendi.');
-}
-
-// WebRTC calls
-let localStream = null;
-let callInProgress = false;
-
-async function startCall(targetUid, mode) {
-  if (callInProgress) return;
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === 'video' });
-    const pc = new RTCPeerConnection({ iceServers: [{ urls:'stun:stun.l.google.com:19302' }] });
-    peerConnections[targetUid] = pc;
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-    pc.onicecandidate = (e) => {
-      if (e.candidate) ws.send(JSON.stringify({ type:'ice_candidate', to:targetUid, candidate:e.candidate }));
-    };
-    pc.ontrack = (e) => {
-      const video = document.getElementById('call-video');
-      if (video) video.srcObject = e.streams[0];
-    };
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    ws.send(JSON.stringify({ type:'call_offer', to:targetUid, offer, mode }));
-    callInProgress = true;
-    document.getElementById('call-panel').classList.remove('hidden');
-  } catch(e) { alert('Arama başlatılamadı: ' + e.message); }
-}
-
-async function handleCall(d) {
-  if (d.type === 'call_offer') {
-    if (!confirm(d.fromUser + ' seni arıyor (' + (d.mode || 'ses') + '). Kabul ediyor musun?')) return;
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: d.mode === 'video' });
-      const pc = new RTCPeerConnection({ iceServers: [{ urls:'stun:stun.l.google.com:19302' }] });
-      peerConnections[d.from] = pc;
-      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-      pc.onicecandidate = (e) => {
-        if (e.candidate) ws.send(JSON.stringify({ type:'ice_candidate', to:d.from, candidate:e.candidate }));
-      };
-      pc.ontrack = (e) => {
-        const video = document.getElementById('call-video');
-        if (video) video.srcObject = e.streams[0];
-      };
-      await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      ws.send(JSON.stringify({ type:'call_answer', to:d.from, answer }));
-      callInProgress = true;
-      document.getElementById('call-panel').classList.remove('hidden');
-    } catch(e) { alert('Arama hatası: ' + e.message); }
-  }
-  if (d.type === 'call_answer') {
-    const pc = peerConnections[d.from];
-    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(d.answer));
-  }
-  if (d.type === 'ice_candidate') {
-    const pc = peerConnections[d.from];
-    if (pc) await pc.addIceCandidate(new RTCIceCandidate(d.candidate));
-  }
-}
-
-function endCall() {
-  for (const id in peerConnections) {
-    peerConnections[id].close();
-    delete peerConnections[id];
-  }
-  if (localStream) localStream.getTracks().forEach(t => t.stop());
-  callInProgress = false;
-  document.getElementById('call-panel').classList.add('hidden');
-  const video = document.getElementById('call-video');
-  if (video) video.srcObject = null;
-}
-
-// admin panel
-async function checkAdmin() {
-  const r = await fetch('/api/admin/check', { headers:{'x-token':token} });
-  const d = await r.json();
-  return d.admin;
-}
-
-async function adminLookup() {
-  const username = document.getElementById('admin-username').value.trim().toLowerCase();
-  if (!username) return;
-  const r = await fetch('/api/admin/lookup', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username}) });
-  const d = await r.json();
-  if (d.error) { alert(d.error); return; }
-  const u = d.user;
-  document.getElementById('admin-result').innerHTML = `
-    <p><b>${u.displayName}</b> (@${u.username})</p>
-    <p>Role: ${u.role} | Coin: ${u.coins} | VIP: ${u.vip ? '✅' : '❌'}</p>
-    <p>Yasaklı: ${u.banned ? '⛔ ' + u.banReason : 'Hayır'}</p>
-    <p>Uyarı: ${(u.warnings||[]).length}</p>
-    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:10px">
-      <button class="btn-sm" onclick="adminBan('${u.username}')">⛔ Yasakla</button>
-      <button class="btn-sm" onclick="adminUnban('${u.username}')">✅ Yasağı Kaldır</button>
-      <button class="btn-sm" onclick="adminWarn('${u.username}')">⚠️ Uyar</button>
-      <button class="btn-sm" onclick="adminVip('${u.username}',true)">👑 VIP Ver</button>
-      <button class="btn-sm" onclick="adminVip('${u.username}',false)">👑 VIP Al</button>
-      <button class="btn-sm" onclick="adminCoins('${u.username}')">🪙 Coin Ekle</button>
-      <button class="btn-sm" onclick="adminDelete('${u.username}')">🗑️ Hesap Sil</button>
-    </div>
-  `;
-}
-
-async function adminBan(username) {
-  const reason = prompt('Yasaklama sebebi:') || 'Admin yasağı';
-  await fetch('/api/admin/ban', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username,reason}) });
-  alert('⛔ ' + username + ' yasaklandı.');
-}
-
-async function adminUnban(username) {
-  await fetch('/api/admin/unban', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username}) });
-  alert('✅ Yasağı kaldırıldı.');
-}
-
-async function adminWarn(username) {
-  const reason = prompt('Uyarı sebebi:') || 'Uyarı';
-  await fetch('/api/admin/warn', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username,reason}) });
-  alert('⚠️ Uyarı gönderildi.');
-}
-
-async function adminVip(username, set) {
-  await fetch('/api/admin/vip', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username,set}) });
-  alert(set ? '👑 VIP verildi.' : '👑 VIP alındı.');
-}
-
-async function adminCoins(username) {
-  const amount = parseInt(prompt('Kaç coin ekle? (+/-):') || '0');
-  if (!amount) return;
-  await fetch('/api/admin/coins', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username,amount}) });
-  alert('🪙 Coin güncellendi.');
-}
-
-async function adminDelete(username) {
-  if (!confirm(username + ' hesabını silmek istediğine emin misin?')) return;
-  await fetch('/api/admin/deleteuser', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({username}) });
-  alert('🗑️ Hesap silindi.');
-}
-
-async function adminBroadcast() {
-  const message = document.getElementById('admin-broadcast-msg').value.trim();
-  if (!message) return;
-  await fetch('/api/admin/broadcast', { method:'POST', headers:{'Content-Type':'application/json','x-token':token}, body:JSON.stringify({message}) });
-  document.getElementById('admin-broadcast-msg').value = '';
-  alert('📢 Mesaj herkese gönderildi.');
-}
+// İlk yükleme
+if(token){
+  fetch('/api/me',{headers:{'x-token':token}}).then(r=>r.json()).then(d=>{
+    if(d.user){user=d.user;initApp()}else showAuthForm('login');
+  }).catch(()=>showAuthForm('login'));
+}else showAuthForm('login');
