@@ -1,3 +1,20 @@
+// toast notification system
+function toast(msg, type) {
+  var c = document.getElementById('toast-container');
+  if (!c) return;
+  var t = document.createElement('div');
+  t.className = 'toast ' + (type || 'info');
+  t.textContent = msg;
+  c.appendChild(t);
+  // play click sound
+  try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQoA').play(); } catch(e) {}
+  setTimeout(function() { t.classList.add('show'); }, 10);
+  setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 300); }, 3500);
+}
+function clickSound() {
+  try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQoA').play(); } catch(e) {}
+}
+
 let token = localStorage.getItem('plamtr_token');
 let ws = null;
 let user = null;
@@ -91,7 +108,6 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const fullName = '';
   const username = document.getElementById('reg-username').value.trim().toLowerCase();
   const email = document.getElementById('reg-email').value.trim();
   const questionId = document.getElementById('reg-question').value;
@@ -103,7 +119,6 @@ async function doRegister() {
   if (!/[A-Z]/.test(pw)) { toast('Şifre büyük harf içermeli!', 'warning'); return; }
   if (!/[a-z]/.test(pw)) { toast('Şifre küçük harf içermeli!', 'warning'); return; }
   if (!/[0-9]/.test(pw)) { toast('Şifre rakam içermeli!', 'warning'); return; }
-  if (username.length < 3 || username.length > 20) { toast('Kullanıcı adı 3-20 karakter olmalı!', 'warning'); return; }
   if (pw !== pw2) { toast('Şifreler eşleşmiyor!', 'warning'); return; }
   const r = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fullName,username,email,questionId,questionText,answer,password:pw}) });
   const d = await r.json();
